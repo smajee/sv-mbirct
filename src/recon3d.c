@@ -44,8 +44,8 @@ void MBIRReconstruct3D(
 {
 	int i,j,jj,p,t,it,it_print=1;
 	int NumMaskVoxels=0;
-	float **x;  /* image data */
-	float **y;  /* sinogram projections data */
+	//float **x;  /* image data */
+	//float **y;  /* sinogram projections data */
 	float **w;  /* projections weights data */
 	float *voxelsBuffer1;  /* the first N entries are the voxel values.  */
 	float *voxelsBuffer2;
@@ -56,17 +56,15 @@ void MBIRReconstruct3D(
 	struct heap priorityheap;
 	initialize_heap(&priorityheap);
 	int *order;
-	struct timeval tm1,tm2;
+	//struct tm1,tm2;
 
-	x = Image->image;   /* x is the image vector */
-	y = sinogram->sino;  /* y is the sinogram vector */
+	//x = Image->image;   /* x is the image vector */
+	//y = sinogram->sino;  /* y is the sinogram vector */
 	w = sinogram->weight; /* vector of weights for each sinogram measurement */
 	int Nx = Image->imgparams.Nx;
 	int Ny = Image->imgparams.Ny;
 	int Nxy = Nx*Ny;
 	int Nz = Image->imgparams.Nz;
-	int NvNc = sinogram->sinoparams.NViews * sinogram->sinoparams.NChannels;
-	int NViews = sinogram->sinoparams.NViews;
 	int MaxIterations = reconparams.MaxIterations;
 	float StopThreshold = reconparams.StopThreshold;
 	int SVLength = svpar.SVLength;
@@ -75,9 +73,9 @@ void MBIRReconstruct3D(
 	int SV_per_Z = svpar.SV_per_Z;
 	int SVsPerLine = svpar.SVsPerLine;
 	int sum = svpar.Nsv;
-	int pieceLength = svpar.pieceLength;
-	struct minStruct * bandMinMap = svpar.bandMinMap;
-	struct maxStruct * bandMaxMap = svpar.bandMaxMap;
+	//int pieceLength = svpar.pieceLength;
+	//struct minStruct * bandMinMap = svpar.bandMinMap;
+	//struct maxStruct * bandMaxMap = svpar.bandMaxMap;
 
 	int rep_num=(int)ceil(1/(4*c_ratio*convergence_rho));
 
@@ -105,7 +103,11 @@ void MBIRReconstruct3D(
 	#endif
 
 	/* Order of pixel updates need NOT be raster order, just initialize */
+	#ifdef USING_ICC
 	order = (int *)_mm_malloc(sum*SV_per_Z*sizeof(int),64);
+	#else
+	order = (int *) aligned_alloc(64,sum*SV_per_Z*sizeof(int));
+	#endif
 
 	t=0;
 
@@ -179,9 +181,13 @@ void MBIRReconstruct3D(
 	int indexList_size=(int) sum*SV_per_Z*4*c_ratio*(1-convergence_rho);	
 	int indexList[indexList_size];   	             	    
     
-
+	#ifdef USING_ICC
 	voxelsBuffer1 = (float *)_mm_malloc(Nxy*sizeof(float),64);
 	voxelsBuffer2 = (float *)_mm_malloc(Nxy*sizeof(float),64);
+	#else
+	voxelsBuffer1 = (float *) aligned_alloc(64,Nxy*sizeof(float));
+	voxelsBuffer2 = (float *) aligned_alloc(64,Nxy*sizeof(float));
+	#endif
 
 	for(i=0;i<Nxy;i++) voxelsBuffer1[i]=0;
 	for(i=0;i<Nxy;i++) voxelsBuffer2[i]=0;
@@ -309,9 +315,16 @@ void MBIRReconstruct3D(
 	fprintf(stdout,"\tAverage update in last iteration (relative) = %f %%\n",avg_update_rel);
 	fprintf(stdout,"\tAverage update in last iteration (magnitude) = %f mm^-1\n",avg_update);
 	
+	#ifdef USING_ICC
 	_mm_free((void *)order);
 	_mm_free((void *)voxelsBuffer1);
 	_mm_free((void *)voxelsBuffer2);
+	#else
+	free((void *)order);
+	free((void *)voxelsBuffer1);
+	free((void *)voxelsBuffer2);
+	#endif
+
 	if(priorityheap.size>0)
 		free_heap((void *)&priorityheap); 
 
@@ -522,7 +535,7 @@ void super_voxel_recon(
 	int bandWidthTemp[sinoparams.NViews]__attribute__((aligned(32)));
 	int bandWidth[NViewsdivided]__attribute__((aligned(32)));
 
-	#ifdef USE_INTEL_MEMCPY
+	#ifdef USING_ICC
 	_intel_fast_memcpy(&bandMin[0],&bandMinMap[theSVPosition].bandMin[0],sizeof(int)*(sinoparams.NViews));
 	_intel_fast_memcpy(&bandMax[0],&bandMaxMap[theSVPosition].bandMax[0],sizeof(int)*(sinoparams.NViews)); 
 	#else
@@ -565,8 +578,6 @@ void super_voxel_recon(
 	float *newWArrayPointer=&newWArray[0][0];
 	float *newEArrayPointer=&newEArray[0][0];
 
-	const int n_theta=sinoparams.NViews;
-
 	/*XW: copy the interlaced we into the memory buffer*/ 
 	for (p = 0; p < NViewsdivided; p++)
 	{
@@ -575,7 +586,7 @@ void super_voxel_recon(
 		for(i=0;i<SV_depth_modified;i++)
 		for(q=0;q<pieceLength;q++) 
 		{
-			#ifdef USE_INTEL_MEMCPY
+			#ifdef USING_ICC
 			_intel_fast_memcpy(newWArrayPointer,&w[startSlice+i][p*pieceLength*sinoparams.NChannels+q*sinoparams.NChannels+bandMin[p*pieceLength+q]],sizeof(float)*(bandWidth[p]));
 			_intel_fast_memcpy(newEArrayPointer,&e[startSlice+i][p*pieceLength*sinoparams.NChannels+q*sinoparams.NChannels+bandMin[p*pieceLength+q]],sizeof(float)*(bandWidth[p]));
 			#else
@@ -589,7 +600,7 @@ void super_voxel_recon(
 
 	for (p = 0; p < NViewsdivided; p++)
 	{
-		#ifdef USE_INTEL_MEMCPY
+		#ifdef USING_ICC
 		_intel_fast_memcpy(&CopyNewEArray[p][0],&newEArray[p][0],sizeof(float)*bandWidth[p]*pieceLength*SV_depth_modified);
 		#else
 		memcpy(&CopyNewEArray[p][0],&newEArray[p][0],sizeof(float)*bandWidth[p]*pieceLength*SV_depth_modified);
