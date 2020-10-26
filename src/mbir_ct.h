@@ -25,7 +25,7 @@ struct SVParams
 	int overlap;
 	int SVDepth;
 	int SV_per_Z;
-	int SVsPerLine;
+	int SVsPerRow;
 	int Nsv;
 	int pieceLength;
 };
@@ -57,9 +57,10 @@ struct CmdLine
     char reconFlag;              /* 0=pre-compute mode; 1=reconstruct (QGGMRF), 2=reconstruct (PandP) */
     char readInitImageFlag;
     char readInitProjectionFlag;
-    char writeProjectionFlag;    /* 0=don't; 1=write Projection default IC (single slice); 2=write multi-slice */
+    char writeProjectionFlag;
     char readAmatrixFlag;        /* 0=compute A; 1=read A */
     char writeAmatrixFlag;
+    char verboseLevel; 		/* 0: quiet mode; 1: print status output */
 };
 
 
